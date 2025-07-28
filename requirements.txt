@@ -1,6 +1,6 @@
 fastapi
 uvicorn
-pinecone-client
+pinecone
 openai
 sentence-transformers
 python-dotenv
