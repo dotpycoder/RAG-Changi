@@ -5,6 +5,8 @@ from pinecone import Pinecone, ServerlessSpec
 from langchain.docstore.document import Document
 from langchain.vectorstores import Pinecone as PineconeVectorStore
 from langchain.embeddings import OpenAIEmbeddings
+from langchain_community.vectorstores import Pinecone as PineconeVectorStore
+from langchain_community.embeddings import OpenAIEmbeddings
 
 # Load environment variables
 load_dotenv()
