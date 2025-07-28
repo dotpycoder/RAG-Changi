@@ -11,7 +11,7 @@ load_dotenv()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
-INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "rag-chatbot-index")
+INDEX_NAME = os.getenv("PINECONE_INDEX_NAME")
 
 # Initialize OpenAI client
 client = OpenAI(api_key=OPENAI_API_KEY)
