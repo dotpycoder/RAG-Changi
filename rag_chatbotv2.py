@@ -1,12 +1,9 @@
 import os
 from dotenv import load_dotenv
 from openai import OpenAI
-from pinecone import Pinecone, ServerlessSpec
-from langchain.docstore.document import Document
-from langchain.vectorstores import Pinecone as PineconeVectorStore
-from langchain.embeddings import OpenAIEmbeddings
-from langchain_community.vectorstores import Pinecone as PineconeVectorStore
-from langchain_community.embeddings import OpenAIEmbeddings
+from pinecone import Pinecone
+from langchain_openai import OpenAIEmbeddings
+from langchain_pinecone import PineconeVectorStore
 
 # Load environment variables
 load_dotenv()
@@ -17,20 +14,13 @@ INDEX_NAME = os.getenv("PINECONE_INDEX_NAME")
 
 # Initialize OpenAI client
 client = OpenAI(api_key=OPENAI_API_KEY)
-embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
 
-# Initialize Pinecone
+# Initialize embeddings and Pinecone vectorstore
+embeddings = OpenAIEmbeddings(model="text-embedding-3-small", openai_api_key=OPENAI_API_KEY)
+
 pc = Pinecone(api_key=PINECONE_API_KEY)
-if INDEX_NAME not in [index["name"] for index in pc.list_indexes()]:
-    pc.create_index(
-        name=INDEX_NAME,
-        dimension=1536,  # Dimension for OpenAI embeddings
-        metric="cosine",
-        spec=ServerlessSpec(cloud="aws", region="us-east-1")
-    )
-
 index = pc.Index(INDEX_NAME)
-vectorstore = PineconeVectorStore(index, embeddings.embed_query, "text")
+vectorstore = PineconeVectorStore(index=index, embedding=embeddings, text_key="text")
 
 def retrieve_context(query, top_k=3):
     docs = vectorstore.similarity_search(query, k=top_k)
