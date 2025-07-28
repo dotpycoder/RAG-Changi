@@ -1,75 +1,45 @@
 import os
 from dotenv import load_dotenv
-from pinecone import Pinecone
-from sentence_transformers import SentenceTransformer
 from openai import OpenAI
-from langchain.memory import ConversationBufferMemory
-
-import warnings
-warnings.filterwarnings("ignore", category=FutureWarning, module="torch.nn.modules.module")
+from pinecone import Pinecone, ServerlessSpec
+from langchain.docstore.document import Document
+from langchain.vectorstores import Pinecone as PineconeVectorStore
+from langchain.embeddings import OpenAIEmbeddings
 
 # Load environment variables
 load_dotenv()
-PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
+
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
+INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "rag-chatbot-index")
 
-# Initialize Pinecone and OpenAI
-pc = Pinecone(api_key=PINECONE_API_KEY)
-index = pc.Index("changi-jewel-index")
-embedder = SentenceTransformer("all-MiniLM-L6-v2")
+# Initialize OpenAI client
 client = OpenAI(api_key=OPENAI_API_KEY)
+embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
 
-# Initialize memory for conversation
-memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
+# Initialize Pinecone
+pc = Pinecone(api_key=PINECONE_API_KEY)
+if INDEX_NAME not in [index["name"] for index in pc.list_indexes()]:
+    pc.create_index(
+        name=INDEX_NAME,
+        dimension=1536,  # Dimension for OpenAI embeddings
+        metric="cosine",
+        spec=ServerlessSpec(cloud="aws", region="us-east-1")
+    )
+
+index = pc.Index(INDEX_NAME)
+vectorstore = PineconeVectorStore(index, embeddings.embed_query, "text")
 
 def retrieve_context(query, top_k=3):
-    """Retrieve top-k relevant documents from Pinecone."""
-    query_embedding = embedder.encode([query]).tolist()
-    results = index.query(vector=query_embedding, top_k=top_k, include_metadata=True)
-    contexts = [m["metadata"].get("text", "") for m in results["matches"]]
-    return "\n\n".join(contexts)
+    docs = vectorstore.similarity_search(query, k=top_k)
+    return "\n".join([doc.page_content for doc in docs])
 
-def generate_answer(query, context):
-    """Use GPT-4o-mini with memory and retrieved context."""
-    # Get chat history from memory
-    chat_history = "\n".join([f"{msg.type}: {msg.content}" for msg in memory.load_memory_variables({})["chat_history"]])
-
-    prompt = f"""
-                You are an AI assistant for Changi Airport Group and Jewel Changi Airport.
-                Use the provided context and past conversation to answer accurately.
-
-                Chat History:
-                {chat_history}
-
-                Context:
-                {context}
-
-                Question: {query}
-
-                Answer:
-"""
-
+def generate_answer(query):
+    context = retrieve_context(query)
+    prompt = f"Context:\n{context}\n\nUser question: {query}\nAnswer as helpfully as possible."
     response = client.chat.completions.create(
-        model="gpt-4o-mini-2024-07-18",
+        model="gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}],
-        temperature=0
+        max_tokens=200
     )
-    answer = response.choices[0].message.content
-
-    # Save to memory
-    memory.save_context({"input": query}, {"output": answer})
-
-    return answer
-
-def chat():
-    print("\nContextual RAG Chatbot ready! Type 'bye' to quit.")
-    while True:
-        query = input("\nAsk a question: ")
-        if query.lower() == "bye":
-            break
-        context = retrieve_context(query)
-        answer = generate_answer(query, context)
-        print("\nAnswer:", answer)
-
-if __name__ == "__main__":
-    chat()
+    return response.choices[0].message["content"]

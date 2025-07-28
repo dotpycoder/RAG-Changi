@@ -1,7 +1,6 @@
 fastapi
 uvicorn
-pinecone
 openai
-sentence-transformers
+pinecone
 python-dotenv
 langchain
